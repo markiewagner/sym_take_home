@@ -1,25 +1,28 @@
 """
 CLI that performs various measurements on remote web pages.
 """
-import requests
-import re
-from collections import defaultdict
-from tabulate import tabulate
 import click
-import sys, os
-from urllib.parse import urlparse
-from cachecontrol import CacheControl
+import os
+import re
+import requests
+import sys
 import time
 import tldextract
+
+
+from cachecontrol import CacheControl
+from collections import defaultdict
+from tabulate import tabulate
 from threading import Thread
+from urllib.parse import urlparse
 from validator_collection import checkers
 from xdg import XDG_DATA_HOME
 
-
 FILE_NAME = "msr_registry.txt"
-VERSION = "0.0.1"
+VERSION = "1.0.0"
 FILE_DIR = ".local/share/msr/"
 FILE_PATH = FILE_DIR + FILE_NAME
+
 
 @click.group()
 def cli():
@@ -51,7 +54,7 @@ def register(url):
     if not os.path.exists(FILE_DIR):
         try:
             os.makedirs(os.path.dirname(FILE_DIR))
-        except OSError as exc: # Guard against race condition
+        except OSError as exc:  # Guard against race condition
             if exc.errno != errno.EEXIST:
                 raise
 
@@ -62,6 +65,8 @@ def register(url):
             if url in line:
                 file.close()
                 return sys.exit(os.EX_OK)
+        # Write a space delimited row of the form "url content_num_bytes,
+        # load_time_seconds, refresh_time.
         file.write(" ".join([url, "0", "0", "0"]) + "\n")
     file.close()
     return sys.exit(os.EX_OK)
@@ -73,7 +78,6 @@ def measure():
     with the size (in bytes) of the body received by making a GET request to
     that URL. Follows redirects as necessary to get an actual content body.
     """
-
     try:
         url_to_bytes = []
         update_registry_cache()
@@ -99,7 +103,9 @@ def race():
     the registry, along with the average page load time for the URLs of that
     domain.
     """
-    # Value = [Sum, number of URLS]
+    # Dictionary where the keys are domains and the values are tuples
+    # corresponding to the total page load time across all URLs and number of
+    # URLs in the domain.
     domain_load_time = defaultdict(lambda: (0.0, 0.0))
 
     threads = []
@@ -163,11 +169,9 @@ def update_line(lines, i):
         data[1] = str(len(response.content))
         data[2] = str(response.elapsed.total_seconds())
         try:
-            max_age = (
-                response.headers["cacche-control"].split("max-age=")[1].split(",")[0]
-            )
+            cache_control = response.headers["cache-control"]
+            max_age = cache_control.split("max-age=")[1].split(",")[0]
             data[3] = str(time.time() + float(max_age))
         except:
             pass
     lines[i] = " ".join(data) + "\n"
-    return
